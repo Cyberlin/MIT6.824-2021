@@ -63,15 +63,17 @@ type Coordinator struct {
 	StartedMapTasks    []*Task
 	StartedReduceTasks []*Task
 	WorkerTimers       []*time.Timer
+	CleanTimer         *time.Ticker
 	NMapComplete       int
 	NReduceComplete    int
 	NMachine           int
 	NMap               int
 	NReduce            int
-	MapTaskCh          chan *Task
-	ReduceTaskCh       chan *Task
+	MapTaskCh          []*Task
+	ReduceTaskCh       []*Task
 	files              []string
 	AllDone            bool
+	Redo               int
 }
 
 //type TaskManager struct {
@@ -135,79 +137,163 @@ func (this *Coordinator) AssignTask(workerId int) *Task {
 	logger.Infof("Get a map task%d with file : %s\n", task.Id, task.MapInputFile)
 	return task
 }
-func (this *Coordinator) setMapComplete(taskId int, files []string) {
+func (this *Coordinator) setMapComplete(task *Task) {
 	this.mu.Lock()
 	defer this.mu.Unlock()
-	logger.Infof("Set map task%d complete with taskId = %d\n", this.StartedMapTasks[taskId].Id, taskId)
-	this.StartedMapTasks[taskId].State = COMPLETE
-	this.StartedMapTasks[taskId].ReduceInputFiles = files
+	//logger.Infof("Set map task%d complete with taskId = %d\n", this.StartedMapTasks[taskId].Id, taskId)
+	//if this.StartedMapTasks[task.Id] == nil {
+	//	this.StartedMapTasks[task.Id] = &Task{
+	//		WorkerId:         task.WorkerId,
+	//		Id:               task.Id,
+	//		Type:             task.Type,
+	//		State:            task.State,
+	//		MapInputFile:     task.MapInputFile,
+	//		ReduceInputFiles: task.ReduceInputFiles,
+	//	}
+	//}
+
+	this.StartedMapTasks[task.Id].State = COMPLETE
+	this.StartedMapTasks[task.Id].ReduceInputFiles = task.ReduceInputFiles
+	this.CleanTimer.Reset(10 * time.Second)
 	this.NMapComplete++
 }
 
-func (this *Coordinator) setReduceComplete(taskId int) {
+func (this *Coordinator) setReduceComplete(task *Task) {
 	this.mu.Lock()
 	defer this.mu.Unlock()
 
-	logger.Infof("Set reduce task%d completer with taskId = %d\n", this.StartedReduceTasks[taskId].Id, taskId)
-	this.StartedReduceTasks[taskId].State = COMPLETE
+	//logger.Infof("Set reduce task%d completer with taskId = %d\n", this.StartedReduceTasks[taskId].Id, taskId)
+	//if this.StartedReduceTasks[task.Id] == nil {
+	//	this.StartedReduceTasks[task.Id] = &Task{
+	//		WorkerId:         task.WorkerId,
+	//		Id:               task.Id,
+	//		Type:             task.Type,
+	//		State:            task.State,
+	//		MapInputFile:     task.MapInputFile,
+	//		ReduceInputFiles: task.ReduceInputFiles,
+	//	}
+	//}
+	this.StartedReduceTasks[task.Id].State = COMPLETE
+	this.CleanTimer.Reset(5 * time.Second)
 	this.NReduceComplete++
 }
 
 func (this *Coordinator) doTaskComplete(msg *HeartBeat) {
 
-	taskId := msg.Task.Id
-
 	if msg.MapComplete == true {
-		this.setMapComplete(taskId, msg.Task.ReduceInputFiles)
+		this.setMapComplete(&msg.Task)
 	}
 	if msg.ReduceComplete == true {
-		this.setReduceComplete(taskId)
+		this.setReduceComplete(&msg.Task)
+	}
+}
+func (this *Coordinator) CleanMapTask() {
+	this.mu.Lock()
+	defer this.mu.Unlock()
+	for i := 0; i < 20; i++ {
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	}
+	for i := 0; i < len(this.StartedMapTasks); i++ {
+		toIdleMapTask := this.StartedMapTasks[i]
+		if toIdleMapTask.State != COMPLETE {
+
+			//fmt.Printf("the lennnnn is %d\n", len(this.MapTaskCh))
+			for i := range this.StartedMapTasks {
+				fmt.Printf("%v\n", this.StartedMapTasks[i])
+			}
+			this.MapTaskCh = append(this.MapTaskCh, toIdleMapTask)
+			//fmt.Printf("the lennnnn is %d\n", len(this.MapTaskCh))
+
+		}
+	}
+}
+func (this *Coordinator) CleanReduceTask() {
+	this.mu.Lock()
+	defer this.mu.Unlock()
+	for i := 0; i < 20; i++ {
+		fmt.Println("###################")
+	}
+	for i := 0; i < len(this.StartedReduceTasks); i++ {
+		toIdleReduceTask := this.StartedReduceTasks[i]
+		if toIdleReduceTask.State != COMPLETE {
+
+			//fmt.Printf("the lennnnn is %d\n", len(this.MapTaskCh))
+			//for i := range this.StartedReduceTasks {
+			//	fmt.Printf("%v\n", this.StartedReduceTasks[i])
+			//}
+			this.ReduceTaskCh = append(this.ReduceTaskCh, toIdleReduceTask)
+			//fmt.Printf("the lennnnn is %d\n", len(this.StartedReduceTasks))
+
+		}
 	}
 }
 func (this *Coordinator) IdleMapTask(workerId int) {
+	log.Panicln("the LEN: --------------------->:", len(this.StartedMapTasks))
 	for i := 0; i < len(this.StartedMapTasks); i++ {
 		toIdleMapTask := this.StartedMapTasks[i]
-		if toIdleMapTask.WorkerId == workerId {
-			fmt.Printf("the workerId: %d, and this.workerId: %d\n", workerId, toIdleMapTask.WorkerId)
+
+		if toIdleMapTask != nil && toIdleMapTask.WorkerId == workerId {
+			this.StartedMapTasks[i] = nil
+			log.Panicln("Set REDO !!!!!!!!!!!!!!!!!!!!")
+			this.Redo = toIdleMapTask.WorkerId
+			//fmt.Printf("the workerId: %d, and this.workerId: %d\n", workerId, toIdleMapTask.WorkerId)
 			if toIdleMapTask.State == COMPLETE {
 				this.NMapComplete--
 			}
 			toIdleMapTask.State = IDLE
-			this.MapTaskCh <- toIdleMapTask
+
+			//fmt.Printf("the lennnnn is %d\n", len(this.MapTaskCh))
+			//for i := range this.StartedMapTasks {
+			//	fmt.Printf("%v\n", this.StartedMapTasks[i])
+			//}
+
+			this.MapTaskCh = append(this.MapTaskCh, toIdleMapTask)
+			for i := range this.MapTaskCh {
+				fmt.Printf("THE ADD MAP TASK %v\n", *this.MapTaskCh[i])
+				panic("add")
+			}
+
 		}
 	}
 }
 func (this *Coordinator) IdleReduceTask(workerId int) {
 	for i := 0; i < len(this.StartedReduceTasks); i++ {
 		toIdleReduceTask := this.StartedReduceTasks[i]
-		if toIdleReduceTask.WorkerId == workerId {
-			fmt.Printf("the workerId: %d, and this.workerId: %d\n", workerId, toIdleReduceTask.WorkerId)
+		if toIdleReduceTask != nil && toIdleReduceTask.WorkerId == workerId && toIdleReduceTask.State != INPROGRESS {
+			this.StartedReduceTasks[i] = nil
+			//fmt.Printf("the workerId: %d, and this.workerId: %d\n", workerId, toIdleReduceTask.WorkerId)
 			toIdleReduceTask.State = IDLE
-			this.MapTaskCh <- toIdleReduceTask
+
+			this.ReduceTaskCh = append(this.ReduceTaskCh, toIdleReduceTask)
 		}
 	}
 }
+
 func (this *Coordinator) SetTimer(workId int) {
 
-	timeout := time.NewTimer(5 * time.Second)
+	timeout := time.NewTimer(10 * time.Second)
 	this.mu.Lock()
+	var inc []*time.Timer
+	if workId >= len(this.WorkerTimers) {
+		inc = make([]*time.Timer, workId-len(this.WorkerTimers)+1)
+	}
+	this.WorkerTimers = append(this.WorkerTimers, inc...)
 	this.WorkerTimers[workId] = timeout
 	this.mu.Unlock()
 	for {
 		select {
 		case <-timeout.C:
 			this.mu.Lock()
+			this.NMachine--
 			fmt.Printf("worker%d is timeout\n", workId)
-
-			fmt.Printf("worker%d: before StartMap: %v\n", workId, this.StartedMapTasks)
+			log.Panicln("CCCCCCCCCCCCCCCCCCCCCOlin")
 			this.IdleMapTask(workId)
-			fmt.Printf("worker%d: after StartMap: %v\n", workId, this.StartedMapTasks)
 
 			fmt.Printf("worker%d: NMAPCompelete%d,NMap:%d\n", workId, this.NMapComplete, this.NMap)
 
 			this.IdleReduceTask(workId)
 			fmt.Printf("worker%d: NReduceCom: %d\n", workId, this.NReduceComplete)
-			time.Sleep(5 * time.Second)
+
 			//this.WorkerTimers[workId].Stop()
 			this.mu.Unlock()
 
@@ -229,15 +315,22 @@ func (this *Coordinator) DoHeartBeat(args *HeartBeat, reply *HeartBeat) error {
 	} else {
 		reply.WorkerID = recv.WorkerID
 	}
-	this.mu.Lock()
-	timer := this.WorkerTimers[workerId]
-	this.mu.Unlock()
-	if timer != nil {
-		this.WorkerTimers[workerId].Reset(5 * time.Second)
-	}
-	if timer == nil {
-		go this.SetTimer(workerId)
-	}
+	//this.mu.Lock()
+	//timeout := time.NewTimer(10 * time.Second)
+	//var inc []*time.Timer
+	//if reply.WorkerID >= len(this.WorkerTimers) {
+	//	inc = make([]*time.Timer, reply.WorkerID-len(this.WorkerTimers)+1)
+	//}
+	//this.WorkerTimers = append(this.WorkerTimers, inc...)
+	//this.WorkerTimers[reply.WorkerID] = timeout
+	//timer := this.WorkerTimers[workerId]
+	//if timer != nil {
+	//	this.WorkerTimers[workerId].Reset(10 * time.Second)
+	//}
+	//this.mu.Unlock()
+	//if timer == nil {
+	//	go this.SetTimer(workerId)
+	//}
 
 	//分配一个任务
 	reply.Task = *this.AssignTask(workerId)
@@ -271,6 +364,7 @@ func (this *Coordinator) DoHeartBeat(args *HeartBeat, reply *HeartBeat) error {
 // main/mrcoordinator.go calls this function.
 // nReduce is the number of reduce tasks to use.
 //
+
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{}
 
@@ -278,21 +372,37 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c.NReduce = nReduce
 	c.NMachine = 1
 	c.files = files
-	c.WorkerTimers = make([]*time.Timer, c.NMap+1)
+	c.WorkerTimers = make([]*time.Timer, c.NMap)
+	c.Redo = -1
+	c.CleanTimer = time.NewTicker(5 * time.Second)
+	go c.CleanZombieTask()
+	c.mu.Lock()
 	c.IdleMapTaskInit()
+	c.mu.Unlock()
 
 	c.server()
 	return &c
 }
+func (this *Coordinator) CleanZombieTask() {
+	for {
+		select {
+		case <-this.CleanTimer.C:
 
+			go this.CleanMapTask()
+			go this.CleanReduceTask()
+		default:
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+}
 func (this *Coordinator) IdleReduceTaskInit() {
-
-	this.ReduceTaskCh = make(chan *Task, this.NReduce)
+	this.StartedReduceTasks = make([]*Task, this.NReduce)
+	this.ReduceTaskCh = make([]*Task, 0)
 	files := make(map[int][]string)
 	for i := range this.StartedMapTasks {
 		curTask := this.StartedMapTasks[i]
 		if curTask.State != COMPLETE {
-			log.Panicln("Map task are not all completed")
+			log.Println("Map task are not all completed")
 		}
 		for _, item := range curTask.ReduceInputFiles {
 			strs := strings.Split(item, "-")
@@ -313,11 +423,12 @@ func (this *Coordinator) IdleReduceTaskInit() {
 			State:            IDLE,
 			ReduceInputFiles: files[i],
 		}
-		this.ReduceTaskCh <- reduceTask
+		this.ReduceTaskCh = append(this.ReduceTaskCh, reduceTask)
 	}
 }
+
 func (this *Coordinator) IdleMapTaskInit() {
-	this.MapTaskCh = make(chan *Task, this.NMap)
+	this.MapTaskCh = make([]*Task, 0)
 	for i := 0; i < this.NMap; i++ {
 		mapTask := &Task{
 			Id:           i,
@@ -325,8 +436,9 @@ func (this *Coordinator) IdleMapTaskInit() {
 			State:        IDLE,
 			MapInputFile: this.files[i],
 		}
-		this.MapTaskCh <- mapTask
+		this.MapTaskCh = append(this.MapTaskCh, mapTask)
 	}
+	this.StartedMapTasks = make([]*Task, this.NMap)
 	logger.Info("Init mapTask Channel")
 	return
 }
@@ -335,27 +447,25 @@ func (this *Coordinator) getMapTask(workerId int) (*Task, bool) {
 	if len(this.MapTaskCh) == 0 {
 		return nil, false
 	}
-	task := <-this.MapTaskCh
+	task := this.MapTaskCh[0]
+	this.MapTaskCh = this.MapTaskCh[1:]
 	task.State = INPROGRESS
 	task.WorkerId = workerId
-	if task.Id > len(this.StartedMapTasks)-1 {
-		this.StartedMapTasks = append(this.StartedMapTasks, task)
-	} else {
-		this.StartedMapTasks[task.Id] = task
-	}
+
+	this.StartedMapTasks[task.Id] = task
+
 	return task, true
 }
 func (this *Coordinator) getReduceTask(workerId int) (*Task, bool) {
 	if len(this.ReduceTaskCh) == 0 {
 		return nil, false
 	}
-	task := <-this.ReduceTaskCh
+	task := this.ReduceTaskCh[0]
+	this.ReduceTaskCh = this.ReduceTaskCh[1:]
 	task.State = INPROGRESS
 	task.WorkerId = workerId
-	if task.Id > len(this.StartedReduceTasks)-1 {
-		this.StartedReduceTasks = append(this.StartedReduceTasks, task)
-	} else {
-		this.StartedReduceTasks[task.Id] = task
-	}
+
+	this.StartedReduceTasks[task.Id] = task
+
 	return task, true
 }

@@ -59,8 +59,8 @@ func Worker(mapf func(string, string) []KeyValue,
 		case REDUCE:
 			doReduce()
 		case WAIT:
-			logger.Infof("worker%d wait 25ms\n", WorkerInfo.WorkerId)
-			time.Sleep(25 * time.Millisecond)
+			logger.Infof("worker%d wait 1000ms\n", WorkerInfo.WorkerId)
+			time.Sleep(1 * time.Second)
 		case DONE:
 			goto Done
 		default:
