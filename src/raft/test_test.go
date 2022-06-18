@@ -947,7 +947,7 @@ func internalChurn(t *testing.T, unreliable bool) {
 		// Make crash/restart infrequent enough that the peers can often
 		// keep up, but not so infrequent that everything has settled
 		// down from one change to the next. Pick a value smaller than
-		// the election timeout, but not hugely smaller.
+		// the election reSleep, but not hugely smaller.
 		time.Sleep((RaftElectionTimeout * 7) / 10)
 	}
 

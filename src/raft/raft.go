@@ -18,6 +18,7 @@ package raft
 //
 
 import (
+	"math"
 	"math/rand"
 	//	"bytes"
 	"sync"
@@ -28,7 +29,7 @@ import (
 	"6.824/labrpc"
 )
 
-//
+// ApplyMsg
 // as each Raft peer becomes aware that successive log entries are
 // committed, the peer should send an ApplyMsg to the service (or
 // tester) on the same server, via the applyCh passed to Make(). set
@@ -51,48 +52,44 @@ type ApplyMsg struct {
 	SnapshotIndex int
 }
 type Log struct {
-	Term    int
-	Content string
+	Term int
+	Cmd  interface{}
 }
 
 //
 // A Go object implementing a single Raft peer.
 //
 type Raft struct {
-	mu                     sync.Mutex          // Lock to protect shared access to this peer's state
-	peers                  []*labrpc.ClientEnd // RPC end points of all peers
-	persister              *Persister          // Object to hold this peer's persisted state
-	me                     int                 // this peer's index into peers[]
-	dead                   int32               // set by Kill()
-	currentTerm            int
-	voteFor                int
-	log                    []Log
-	leaderId               int
-	commitIndex            int
-	lastApplied            int
-	nextIndex              []int
-	matchIndex             []int
-	resetTimeout           chan struct{}
-	voteRepliesCh          chan *RequestVoteReply
-	appendEntriesRepliesCh chan *AppendEntriesReply
-	voteReqCh              chan *RequestVoteArgs
-	appendEntriesReqCh     chan *AppendEntriesArgs
-	nVote                  int
-	role                   Role
-	stopReqForVote         chan struct{}
-	stopApdEntries         chan struct{}
+	mu              sync.Mutex          // Lock to protect shared access to this peer's state
+	peers           []*labrpc.ClientEnd // RPC end points of all peers
+	persister       *Persister          // Object to hold this peer's persisted state
+	me              int                 // this peer's index into peers[]
+	dead            int32               // set by Kill()
+	applyCh         chan ApplyMsg
+	currentTerm     int
+	voteFor         int
+	log             []Log
+	commitIndex     int
+	lastApplied     int
+	nextIndex       []int
+	matchIndex      []int
+	nVote           int
+	role            Role
+	heartBeatElapse time.Duration
+	nCopyed         []int
+	resetTimeout    int32
 }
 type Role int
 
 const (
-	LEADER Role = iota + 1
-	FOLLOWER
+	FOLLOWER Role = iota + 1
 	CANDIDATE
+	LEADER
 )
 
 const NONE = -1
 
-//
+// RequestVoteArgs
 // example RequestVote RPC arguments structure.
 // field names must start with capital letters!
 //
@@ -131,8 +128,13 @@ type AppendEntriesReply struct {
 func (this *Raft) GetState() (int, bool) {
 
 	var term int
-	var isleader bool
-	// Your code here (2A).
+	isleader := false
+	this.mu.Lock()
+	term = this.currentTerm
+	if this.role == LEADER {
+		isleader = true
+	}
+	this.mu.Unlock()
 	return term, isleader
 }
 
@@ -174,7 +176,7 @@ func (this *Raft) readPersist(data []byte) {
 	// }
 }
 
-//
+// CondInstallSnapshot
 // A service wants to switch to snapshot.  Only do so if Raft hasn't
 // have more recent info since it communicate the snapshot on applyCh.
 //
@@ -194,45 +196,49 @@ func (this *Raft) Snapshot(index int, snapshot []byte) {
 
 }
 
-//
+// RequestVote
 // example RequestVote RPC handler.
 //
-func (this *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) bool {
+func (this *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	this.mu.Lock()
-	this.mu.Unlock()
+	defer this.mu.Unlock()
+	this.Debug(dVote, "Recv vote req: %v", *args)
 	if args.Term > this.currentTerm {
+		this.Debug(dTerm, "Term: convert 2 follower")
 		this.currentTerm = args.Term
-		this.voteFor = NONE
-		this.role = FOLLOWER
+		this.SwitchRoleTo(FOLLOWER)
 	}
 
 	if args.Term < this.currentTerm {
+		this.Debug(dVote, "Term: return false")
 		reply.VoteGranted = false
 		reply.Term = this.currentTerm
-		return true
+		return
 	}
 
 	if this.voteFor == NONE || this.voteFor == args.CandidateId {
 		if this.isUpdatedLog(args) {
+			this.Debug(dVote, "Granted vote")
+			this.voteFor = args.CandidateId
 			reply.VoteGranted = true
 			reply.Term = this.currentTerm
+			this.ResetTimeout()
 		} else {
+			this.Debug(dVote, "Updated: return false")
 			reply.VoteGranted = false
 			reply.Term = this.currentTerm
 		}
 	} else {
+		this.Debug(dVote, "VoteFor: return false")
 		reply.VoteGranted = false
 		reply.Term = this.currentTerm
 	}
-	return true
+	return
 
 }
 func (this *Raft) isUpdatedLog(args *RequestVoteArgs) bool {
 	//later term is more up-to-date, the same term, longer is more up-to-date
 	myLastLogIndex := len(this.log) - 1
-	if myLastLogIndex < 0 {
-		return true
-	}
 
 	myLastLogTerm := this.log[myLastLogIndex].Term
 
@@ -247,103 +253,102 @@ func (this *Raft) isUpdatedLog(args *RequestVoteArgs) bool {
 	return true
 
 }
-func (this *Raft) SendReqForVote(toSend *RequestVoteArgs) {
-	// keep periodically send the requset for vote, stop unitl noticed
+func (this *Raft) BoardCastReqVote(toSend *RequestVoteArgs) {
+	// 对于没有收到回复的srv 保持发送,直到成为leader 或者 follower
+	for srv := range this.peers {
+		if srv == this.me {
+			continue
+		}
 
-	srvList := make(chan int, len(this.peers))
+		go func(srv int, toSend *RequestVoteArgs) {
+			var reply = &RequestVoteReply{}
+			for {
+				this.mu.Lock()
+				if toSend.Term != this.currentTerm || this.role != CANDIDATE {
+					return
+				}
+				this.mu.Unlock()
+				Dprintf(this.me, dVote, "Sendto %d, msg: %v", srv, toSend)
 
-	go func() {
-		for i := range this.peers {
-			if i == this.me {
-				continue
+				ok := this.sendRequestVote(srv, toSend, reply)
+				if ok {
+					this.HandleVoteReply(reply)
+					break
+				}
+				Dprintf(this.me, dVote, "fail to send srv%d", srv)
+				time.Sleep(100 * time.Millisecond)
 			}
-			srvList <- i
-		}
-	}()
-
-	for {
-		nSrv := len(srvList)
-		for i := 0; i < nSrv; i++ {
-			srv := <-srvList
-			reply := &RequestVoteReply{}
-			this.Debug(dVote, "sendTo:%d, msg:%v", srv, toSend)
-			ok := this.sendRequestVote(srv, toSend, reply)
-			if !ok {
-				srvList <- srv
-				continue
-			}
-			this.voteRepliesCh <- reply
-		}
-		if len(srvList) == 0 {
-			break
-		}
-		this.mu.Lock()
-		if toSend.Term != this.currentTerm || this.role == LEADER || this.role == FOLLOWER {
-			break
-		}
-		this.mu.Unlock()
-
-		time.Sleep(50 * time.Millisecond)
+		}(srv, toSend)
 	}
+
 }
 func (this *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	this.mu.Lock()
 	defer this.mu.Unlock()
-
+	this.Debug(dLog, "Recv apd req: %v", *args)
 	if args.Term > this.currentTerm {
+		this.Debug(dLog, "Term: convert 2 follower")
 		this.currentTerm = args.Term
-		this.voteFor = NONE
-		this.role = FOLLOWER
+		this.SwitchRoleTo(FOLLOWER)
 	}
 
+	if this.role == CANDIDATE {
+		this.SwitchRoleTo(FOLLOWER)
+	}
+
+	this.ResetTimeout()
+
 	if args.Term < this.currentTerm {
+		this.Debug(dLog, "Term: return false")
 		reply.Success = false
 		reply.Term = this.currentTerm
 		return
 	}
 
 	if !this.matchPrevLog(args) {
+		this.Debug(dLog, "!match: return false")
 		reply.Success = false
 		reply.Term = this.currentTerm
 		return
 	}
-
+	this.Debug(dLog, "Before append:%v", this.log)
 	if LogConflict(args, this.log) == true {
-		this.log = this.log[:args.PrevLogIndex]
+		this.Debug(dLog, "LogConflict")
+		//如果是冲突那肯定是在这个范围以内
+		this.log = this.log[:args.PrevLogIndex+1]
 	}
-
 	this.log = append(this.log, args.Entries...)
-
+	this.Debug(dLog, "After append:%v", this.log)
 	if args.LeaderCommit > this.commitIndex {
 		this.commitIndex = Min(args.LeaderCommit, len(this.log)-1)
 	}
 
 	reply.Success = true
 	reply.Term = this.currentTerm
+	return
 
 }
 func (this *Raft) matchPrevLog(args *AppendEntriesArgs) bool {
-	myPrevLogIdx := len(this.log) - 2
-	if myPrevLogIdx < 0 {
+	limitPrevIdx := len(this.log) - 1
+	if limitPrevIdx <= 0 {
 		return true
 	}
-	myPrevLogTerm := this.log[myPrevLogIdx].Term
 
-	if args.PrevLogIndex > myPrevLogIdx {
+	if args.PrevLogIndex > limitPrevIdx {
 		// if log doesn't contain an entry at prevLogIndex whose term matches PrevLogTerm
 		return false
 	}
-	Assert(args.PrevLogIndex < myPrevLogIdx, false, "wrong leader election")
 
-	if args.PrevLogTerm != myPrevLogTerm {
+	if args.PrevLogTerm != this.log[args.PrevLogIndex].Term {
 		return false
 	}
+
 	return true
 
 }
 func LogConflict(args *AppendEntriesArgs, myLogs []Log) bool {
 	//TODO optimization: batching entries
-	if args.PrevLogIndex+1 > len(myLogs) {
+	if args.PrevLogIndex+1 >= len(myLogs) {
 		return false
 	}
 	if myLogs[args.PrevLogIndex+1].Term == args.Entries[0].Term {
@@ -352,7 +357,7 @@ func LogConflict(args *AppendEntriesArgs, myLogs []Log) bool {
 	return true
 }
 
-//
+// Start
 // the service using Raft (e.g. a k/v server) wants to start
 // agreement on the next command to be appended to Raft's log. if this
 // server isn't the leader, returns false. otherwise start the
@@ -367,16 +372,22 @@ func LogConflict(args *AppendEntriesArgs, myLogs []Log) bool {
 // the leader.
 //
 func (this *Raft) Start(command interface{}) (int, int, bool) {
-	index := -1
-	term := -1
-	isLeader := true
+	this.mu.Lock()
+	defer this.mu.Unlock()
+	index := len(this.log)
+	term := this.currentTerm
+	isLeader := this.role == LEADER
+	newEntry := Log{
+		Term: this.currentTerm,
+		Cmd:  command,
+	}
 
-	// Your code here (2B).
-
+	//todo: optimazation: batching
+	this.log = append(this.log, newEntry)
 	return index, term, isLeader
 }
 
-//
+// Kill
 // the tester doesn't halt goroutines created by Raft after each test,
 // but it does call the Kill() method. your code can use killed() to
 // check whether Kill() has been called. the use of atomic avoids the
@@ -397,38 +408,54 @@ func (this *Raft) killed() bool {
 	return z == 1
 }
 
+func (this *Raft) ResetTimeout() {
+	//Dprintf(this.me, dTimer, "ResetTimeout")
+	atomic.SwapInt32(&this.resetTimeout, 1)
+}
+
+func (this *Raft) reSleep() bool {
+	z := atomic.LoadInt32(&this.resetTimeout)
+	if z == 1 {
+		atomic.SwapInt32(&this.resetTimeout, 0)
+		return true
+	} else {
+		return false
+	}
+}
+
 // The ticker go routine starts a new election if this peer hasn't received
 // heartsbeats recently.
 func (this *Raft) ticker() {
+	sleepTicks := math.MinInt32
 	for this.killed() == false {
+		debugTime := 0
+		rand.Seed(time.Now().UnixNano())
 
-		// Your code here to check if a leader election should
-		// be started and to randomize sleeping time using
-		// time.Sleep().
-		select {
-		case <-this.resetTimeout:
-			rand.Seed(time.Now().UnixNano())
+		sleepTicks = rand.Intn(7) + 8
 
-			sleepTime := rand.Intn(100) + 100
-			time.Sleep(time.Millisecond * time.Duration(sleepTime))
-		default:
-			// begin to election
-			this.mu.Lock()
-			if this.role == LEADER {
-				continue
+		for sleepTicks != 0 {
+			switch this.reSleep() {
+			case true:
+				Dprintf(this.me, dTimer, "Resleep")
+				sleepTicks = rand.Intn(7) + 8
+			default:
+				sleepTicks--
 			}
-			go this.StartElection()
-			this.mu.Unlock()
+			debugTime += 40
+			time.Sleep(40 * time.Millisecond)
 		}
+
+		this.mu.Lock()
+		if this.role == CANDIDATE || this.role == FOLLOWER {
+			this.Debug(dTimer, "start election timeout: %d ms", debugTime)
+			this.SwitchRoleTo(CANDIDATE)
+		}
+		this.mu.Unlock()
+
 	}
 }
 func (this *Raft) StartElection() {
 	this.mu.Lock()
-
-	this.currentTerm++
-	this.voteFor = this.me
-	this.nVote++
-	this.role = CANDIDATE
 
 	args := &RequestVoteArgs{
 		Term:         this.currentTerm,
@@ -438,64 +465,225 @@ func (this *Raft) StartElection() {
 	}
 
 	this.mu.Unlock()
-	go this.SendReqForVote(args)
+	go this.BoardCastReqVote(args)
 }
 
-//todo handle the apd entries request
-func (this *Raft) HandleApdEntriesReq(aEntry *AppendEntriesArgs) {
-
-}
-func (this *Raft) ProcessResp() {
-	for {
-		select {
-		case vote := <-this.voteRepliesCh:
-			go this.HandleVoteReply(vote)
-		case aEntry := <-this.appendEntriesRepliesCh:
-			go this.HandleApdEntriesReply(aEntry)
-		default:
-			time.Sleep(time.Millisecond * 50)
-		}
-	}
-}
 func (this *Raft) HandleVoteReply(vote *RequestVoteReply) {
 	this.mu.Lock()
 	defer this.mu.Unlock()
-
+	this.Debug(dVote, "Recv vote reply")
 	term := vote.Term
 	if term > this.currentTerm {
 		this.currentTerm = term
-		this.role = FOLLOWER
+		this.SwitchRoleTo(FOLLOWER)
+		return
+	}
+
+	if this.role != CANDIDATE {
+		this.Debug(dWarn, "Not candidate: return")
+		return
 	}
 
 	if vote.VoteGranted == true {
 		this.nVote++
 	}
 
-	if this.nVote >= len(this.peers)/2 {
-		this.role = LEADER
+	if this.nVote >= len(this.peers)/2+1 {
+		this.SwitchRoleTo(LEADER)
 	}
 
 }
 
-//todo handle the apd entries reply
-func (this *Raft) HandleApdEntriesReply(aEntry *AppendEntriesReply) {
-	term := aEntry.Term
-	success := aEntry.Success
-	this.mu.Lock()
-	if term >= this.currentTerm {
-		this.currentTerm = term
-		this.role = FOLLOWER
+//持锁调用
+func (this *Raft) SwitchRoleTo(role Role) {
+	if role == this.role {
+		return
 	}
-	if this.role == LEADER {
-		if success {
 
+	switch role {
+	case FOLLOWER:
+		this.Debug(dTrace, "Convert 2 FOLLOWER")
+		this.nVote = 0
+		this.voteFor = NONE
+		this.role = FOLLOWER
+
+		this.ResetTimeout()
+	case CANDIDATE:
+		this.Debug(dTrace, "Convert 2 CANDIDATE")
+		this.currentTerm++
+		this.voteFor = this.me
+		this.nVote = 0
+		this.nVote++
+		this.role = CANDIDATE
+
+		this.ResetTimeout()
+		go this.StartElection()
+	case LEADER:
+		this.Debug(dTrace, "Convert 2 LEADER")
+		this.role = LEADER
+		//初始化 leader
+		for i := range this.nextIndex {
+			this.nextIndex[i] = len(this.log)
+		}
+		for i := range this.matchIndex {
+			this.matchIndex[i] = 0
+		}
+		for i := range this.nCopyed {
+			this.nCopyed[i] = 0
+		}
+		this.Debug(dLeader, "LeaderInit: nextIndex:%v, matchIndex:%v, nCopyed:%v", this.nextIndex, this.matchIndex, this.nCopyed)
+		go this.StartLeader()
+	}
+}
+
+// HandleApdEntriesReply
+//todo handle the apd entries reply
+func (this *Raft) HandleApdEntriesReply(aEntry *AppendEntriesReply, srv int, send *AppendEntriesArgs) {
+	this.mu.Lock()
+	defer this.mu.Unlock()
+
+	if aEntry.Term > this.currentTerm {
+		this.Debug(dTerm, "Convert 2 Follower")
+		this.currentTerm = aEntry.Term
+		this.SwitchRoleTo(FOLLOWER)
+		return
+	}
+
+	if this.role != LEADER {
+		this.Debug(dVote, "Not a leader: return")
+		return
+	}
+
+	if aEntry.Success == true {
+		this.nextIndex[srv] += len(send.Entries)
+		this.matchIndex[srv] = send.PrevLogIndex + len(send.Entries)
+		this.Debug(dLog, "Success reply After: mtchIdx: %d, nxtIdx:%d", this.matchIndex[srv], this.nextIndex[srv])
+		this.UpdateCommit(srv)
+	} else {
+		// 返回失败就两种原因,第一种就是因为term , 第二种就是因为prev 不匹配
+		//todo optimzation: backtraking nextIndex
+		this.nextIndex[srv]--
+	}
+}
+func (this *Raft) UpdateCommit(srv int) {
+	//nCopyed 只要比 nextIndex 大就行
+	n := len(this.nCopyed)
+
+	if this.nextIndex[srv] > n-1 {
+		incLen := this.matchIndex[srv] - len(this.nCopyed) + 1
+		this.nCopyed = append(this.nCopyed, make([]int, incLen)...)
+	} else {
+		this.nCopyed[this.matchIndex[srv]]++
+		this.Debug(dCommit, "matchIdx: %d, loglen:%d", this.matchIndex[srv], len(this.log))
+		if this.nCopyed[this.matchIndex[srv]] >= len(this.peers)/2+1 &&
+			this.log[this.matchIndex[srv]].Term == this.currentTerm {
+			//todo 不太确定要不要用max
+			this.Debug(dCommit, "cmitIdx: %d", this.commitIndex)
+			this.commitIndex = Max(this.commitIndex, this.matchIndex[srv])
 		}
 	}
-	this.mu.Unlock()
+	if this.lastApplied < this.commitIndex {
+		this.Applier()
+	}
 
 }
+func (this *Raft) Applier() {
 
-//
+	toApplys := this.log[this.lastApplied+1 : this.commitIndex+1]
+
+	for i, toApply := range toApplys {
+
+		var msg ApplyMsg
+		msg.CommandValid = true
+		msg.Command = toApply.Cmd
+		msg.CommandIndex = this.lastApplied + i + 1
+
+		this.applyCh <- msg
+
+		if this.lastApplied < msg.CommandIndex {
+			this.lastApplied = msg.CommandIndex
+		}
+
+	}
+}
+func (this *Raft) BoardCastApdEntries() {
+	for srv := range this.peers {
+		if srv == this.me {
+			continue
+		}
+
+		go func(srv int) {
+			var toSend *AppendEntriesArgs
+			var entries []Log
+			for {
+				this.mu.Lock()
+				if this.role != LEADER {
+					this.Debug(dLeader, "Not Leader, stop sending apd entries")
+					this.mu.Unlock()
+					return
+				}
+
+				if this.BeHeartBeat(srv) == true {
+					entries = nil
+				} else {
+					//todo optimization: batching logs
+					this.Debug(dLeader, "Have entry: nxtIdx: %d, mtchIdx: %d", this.nextIndex[srv], this.matchIndex[srv])
+					entries = make([]Log, 0)
+					entries = append(entries, this.log[this.nextIndex[srv]])
+				}
+				prevLogTerm := 0
+				if this.nextIndex[srv] <= len(this.log)-1 {
+					prevLogTerm = this.log[this.nextIndex[srv]-1].Term
+				}
+				toSend = &AppendEntriesArgs{
+					Term:         this.currentTerm,
+					LeaderId:     this.me,
+					PrevLogIndex: this.nextIndex[srv] - 1,
+					PrevLogTerm:  prevLogTerm,
+					Entries:      entries,
+					LeaderCommit: this.commitIndex,
+				}
+				reply := &AppendEntriesReply{}
+				this.Debug(dLeader, "sendTo:%d, msg:%v", srv, toSend)
+				this.mu.Unlock()
+
+				ok := this.sendAppendEntries(srv, toSend, reply)
+
+				if ok {
+					//todo:[refactor]: ticket pool when apd entries
+					this.HandleApdEntriesReply(reply, srv, toSend)
+					break
+				}
+				Dprintf(this.me, dLeader, "Fail to send %d", srv)
+			}
+		}(srv)
+	}
+}
+func (this *Raft) BeHeartBeat(srv int) bool {
+	if this.nextIndex[srv] >= len(this.log) {
+		return true
+	}
+	//todo 这个优化动画上有实现,注意实现正确性
+	if this.nextIndex[srv] != this.matchIndex[srv]+1 {
+		return true
+	}
+	return false
+}
+
+func (this *Raft) StartLeader() {
+	for this.killed() == false {
+		this.mu.Lock()
+		if this.role != LEADER {
+			this.mu.Unlock()
+			return
+		}
+		this.mu.Unlock()
+		go this.BoardCastApdEntries()
+		time.Sleep(this.heartBeatElapse)
+	}
+}
+
+// Make
 // the service or tester wants to create a Raft server. the ports
 // of all the Raft servers (including this one) are in peers[]. this
 // server's port is peers[me]. all the servers' peers[] arrays
@@ -512,9 +700,26 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.peers = peers
 	rf.persister = persister
 	rf.me = me
-
+	rf.applyCh = applyCh
 	// Your initialization code here (2A, 2B, 2C).
-
+	rf.mu = sync.Mutex{}
+	rf.dead = 0
+	rf.currentTerm = 1
+	rf.voteFor = NONE
+	//dummy node
+	rf.log = make([]Log, 1)
+	rf.commitIndex = 0
+	rf.lastApplied = 0
+	rf.nextIndex = make([]int, len(peers))
+	for i := range rf.nextIndex {
+		rf.nextIndex[i] = 1
+	}
+	rf.matchIndex = make([]int, len(peers))
+	rf.nVote = 0
+	rf.role = FOLLOWER
+	rf.heartBeatElapse = 100 * time.Millisecond
+	rf.nCopyed = make([]int, 20)
+	rf.resetTimeout = 0
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
@@ -537,7 +742,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 // The labrpc package simulates a lossy network, in which servers
 // may be unreachable, and in which requests and replies may be lost.
 // Call() sends a request and waits for a reply. If a reply arrives
-// within a timeout interval, Call() returns true; otherwise
+// within a reSleep interval, Call() returns true; otherwise
 // Call() returns false. Thus Call() may not return for a while.
 // A false return can be caused by a dead server, a live server that
 // can't be reached, a lost request, or a lost reply.
@@ -555,5 +760,9 @@ func Make(peers []*labrpc.ClientEnd, me int,
 //
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
+	return ok
+}
+func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
+	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }

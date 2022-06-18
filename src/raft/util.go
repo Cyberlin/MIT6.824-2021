@@ -37,6 +37,7 @@ const (
 	dVote    logTopic = "VOTE"
 	dWarn    logTopic = "WARN"
 )
+const padding = "#"
 
 // Retrieve the verbosity level from an environment variable
 func getVerbosity() int {
@@ -59,41 +60,48 @@ func init() {
 	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
 }
 func getInvokerLocation(skipNumber int) string {
-	_, file, line, ok := runtime.Caller(skipNumber)
+	pc, _, line, ok := runtime.Caller(skipNumber)
 	if !ok {
 		return ""
 	}
-	simpleFileName := ""
-	if index := strings.LastIndex(file, "/"); index > 0 {
-		simpleFileName = file[index+1 : len(file)]
+
+	funcPath := ""
+	funcPtr := runtime.FuncForPC(pc)
+	if funcPtr != nil {
+		funcPath = funcPtr.Name()
 	}
-
-	return fmt.Sprintf("(%s:%d):", simpleFileName, line)
+	nameArr := strings.Split(funcPath, ".")
+	realFunc := nameArr[len(nameArr)-1]
+	return fmt.Sprintf("(%s:%d)", realFunc, line)
 }
-
 func (this *Raft) Debug(topic logTopic, format string, a ...interface{}) {
-	if debugVerbosity >= 1 {
-		time := time.Since(debugStart).Microseconds()
-		time /= 100
-		tag := fmt.Sprintf("[%s]", string(topic))
-		idMark := " "
-		if this.me == this.leaderId {
-			idMark = "*"
-		}
-		invorkPlace := getInvokerLocation(2)
-		prefix := fmt.Sprintf("%06d %v S%d%s %s", time, tag, this.me, idMark, invorkPlace)
-		format = prefix + format
-		log.Printf(format, a...)
+	if debugVerbosity < 1 {
+		return
 	}
+
+	time := time.Since(debugStart).Microseconds()
+	time /= 100
+	tag := fmt.Sprintf("[%s]", string(topic))
+	idMark := " "
+	if this.role == LEADER {
+		idMark = "*"
+	}
+	paddings := strings.Repeat(padding, this.me)
+	invorkPlace := getInvokerLocation(2)
+	prefix := fmt.Sprintf("%s%06d %v S%d%s-%d %s", paddings,
+		time, tag, this.me, idMark, this.currentTerm, invorkPlace)
+
+	format = prefix + format
+	log.Printf(format, a...)
 }
-func Dprintf(topic logTopic, format string, a ...interface{}) {
+func Dprintf(me int, topic logTopic, format string, a ...interface{}) {
 	if debugVerbosity >= 1 {
 		time := time.Since(debugStart).Microseconds()
 		time /= 100
 		tag := fmt.Sprintf("[%s]", string(topic))
-
+		paddings := strings.Repeat(padding, me)
 		invorkPlace := getInvokerLocation(2)
-		prefix := fmt.Sprintf("%06d %v %s", time, tag, invorkPlace)
+		prefix := fmt.Sprintf("%s%06d %v %s", paddings, time, tag, invorkPlace)
 		format = prefix + format
 		log.Printf(format, a...)
 	}
@@ -118,4 +126,17 @@ func Min(nums ...int) int {
 		return nums[i] < nums[j]
 	})
 	return nums[0]
+}
+func Max(nums ...int) int {
+	Assert(len(nums) == 0, false, "Bad min usage!")
+	sort.Slice(nums, func(i, j int) bool {
+		return nums[i] > nums[j]
+	})
+	return nums[0]
+}
+func growLogAt(src []Log, index int) {
+	if index > len(src)-1 {
+		inc := make([]Log, 2*(index-len(src)+1))
+		src = append(src, inc...)
+	}
 }
