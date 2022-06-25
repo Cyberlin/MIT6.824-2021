@@ -268,13 +268,17 @@ func (this *Raft) BoardCastReqVote(msg *RequestVoteArgs) {
 		go func(srv int, msg *RequestVoteArgs) {
 			var reply = &RequestVoteReply{}
 			for {
+				exit := false
 				this.mu.Lock()
 				if msg.Term != this.currentTerm || this.role != CANDIDATE {
 					this.Debug(dTrace, "Stop send msg to fail node")
-					return
+					exit = true
 				}
 				this.mu.Unlock()
 
+				if exit == true {
+					return
+				}
 				Dprintf(this.me, dVote, "Sendto %d, msg: %v", srv, msg)
 				ok := this.sendRequestVote(srv, msg, reply)
 
@@ -445,7 +449,7 @@ func (this *Raft) ticker() {
 	for this.killed() == false {
 
 		rand.Seed(time.Now().UnixNano())
-		electionTimeout := rand.Intn(200) + 280
+		electionTimeout := rand.Intn(180) + 250
 
 		time.Sleep(time.Duration(electionTimeout) * time.Millisecond)
 
@@ -631,13 +635,17 @@ func (this *Raft) SyncAppendEntries(srv int) {
 	this.mu.Unlock()
 
 	for {
+		exit := false
 		this.mu.Lock()
 		if this.role != LEADER || msg.Term != this.currentTerm {
 			this.Debug(dLeader, "Not Leader, Term stale")
-			this.mu.Unlock()
-			return
+			exit = true
 		}
 		this.mu.Unlock()
+
+		if exit == true {
+			return
+		}
 
 		reply := &AppendEntriesReply{}
 		this.Debug(dLeader, "sendTo:%d, msg:%v", srv, msg)
@@ -648,9 +656,10 @@ func (this *Raft) SyncAppendEntries(srv int) {
 			//todo:[refactor]: ticket pool when apd entries
 			this.HandleAppendEntriesReply(reply, srv, msg)
 			return
+		} else {
+			Dprintf(this.me, dLeader, "Fail to send %d", srv)
+			time.Sleep(this.heartBeatElapse)
 		}
-		Dprintf(this.me, dLeader, "Fail to send %d", srv)
-		time.Sleep(this.heartBeatElapse)
 	}
 
 }
