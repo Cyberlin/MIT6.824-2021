@@ -106,37 +106,37 @@ func Dprintf(me int, topic logTopic, format string, a ...interface{}) {
 		log.Printf(format, a...)
 	}
 }
-func Assert(val interface{}, expect interface{}, note ...interface{}) {
+func Assert(me int, expect interface{}, val interface{}, note string) {
 	if debugVerbosity >= 1 {
 		if val != expect {
-			timeA := time.Since(debugStart).Microseconds()
-			timeA /= 100
+			time := time.Since(debugStart).Microseconds()
+			time /= 100
+
 			tag := "[ASSERT]"
-
+			paddings := strings.Repeat(padding, me)
 			invorkPlace := getInvokerLocation(2)
-			info := fmt.Sprintf("%06d %v %s: %s", timeA, tag, invorkPlace, note)
+			prefix := fmt.Sprintf("%s%06d %v %s", paddings, time, tag, invorkPlace)
+			note = prefix + note
 
-			log.Panicln(info)
+			log.Panicln(note)
 		}
 	}
 }
 func Min(nums ...int) int {
-	Assert(len(nums) == 0, false, "Bad min usage!")
 	sort.Slice(nums, func(i, j int) bool {
 		return nums[i] < nums[j]
 	})
 	return nums[0]
 }
 func Max(nums ...int) int {
-	Assert(len(nums) == 0, false, "Bad min usage!")
 	sort.Slice(nums, func(i, j int) bool {
 		return nums[i] > nums[j]
 	})
 	return nums[0]
 }
-func growLogAt(src []Log, index int) {
+func growLogAt(src []int, index int) {
 	if index > len(src)-1 {
-		inc := make([]Log, 2*(index-len(src)+1))
+		inc := make([]int, 2*(index-len(src)+1))
 		src = append(src, inc...)
 	}
 }

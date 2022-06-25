@@ -18,7 +18,6 @@ package raft
 //
 
 import (
-	"math"
 	"math/rand"
 	//	"bytes"
 	"sync"
@@ -73,7 +72,6 @@ type Raft struct {
 	lastApplied     int
 	nextIndex       []int
 	matchIndex      []int
-	nVote           int
 	role            Role
 	heartBeatElapse time.Duration
 	nCopyed         []int
@@ -202,38 +200,44 @@ func (this *Raft) Snapshot(index int, snapshot []byte) {
 func (this *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	this.mu.Lock()
 	defer this.mu.Unlock()
-	this.Debug(dVote, "Recv vote req: %v", *args)
-	if args.Term > this.currentTerm {
-		this.Debug(dTerm, "Term: convert 2 follower")
-		this.currentTerm = args.Term
-		this.SwitchRoleTo(FOLLOWER)
-	}
 
+	this.Debug(dVote, "Recv voteReq: %v", *args)
 	if args.Term < this.currentTerm {
 		this.Debug(dVote, "Term: return false")
 		reply.VoteGranted = false
 		reply.Term = this.currentTerm
 		return
 	}
+	if args.Term > this.currentTerm {
+		this.currentTerm = args.Term
+		this.voteFor = NONE
+		this.role = FOLLOWER
+	}
 
 	if this.voteFor == NONE || this.voteFor == args.CandidateId {
 		if this.isUpdatedLog(args) {
 			this.Debug(dVote, "Granted vote")
 			this.voteFor = args.CandidateId
+
 			reply.VoteGranted = true
 			reply.Term = this.currentTerm
+
 			this.ResetTimeout()
+
+			return
 		} else {
 			this.Debug(dVote, "Updated: return false")
 			reply.VoteGranted = false
 			reply.Term = this.currentTerm
+
+			return
 		}
 	} else {
 		this.Debug(dVote, "VoteFor: return false")
 		reply.VoteGranted = false
 		reply.Term = this.currentTerm
+		return
 	}
-	return
 
 }
 func (this *Raft) isUpdatedLog(args *RequestVoteArgs) bool {
@@ -253,32 +257,37 @@ func (this *Raft) isUpdatedLog(args *RequestVoteArgs) bool {
 	return true
 
 }
-func (this *Raft) BoardCastReqVote(toSend *RequestVoteArgs) {
+func (this *Raft) BoardCastReqVote(msg *RequestVoteArgs) {
 	// 对于没有收到回复的srv 保持发送,直到成为leader 或者 follower
+	var nVote int32 = 1
 	for srv := range this.peers {
 		if srv == this.me {
 			continue
 		}
 
-		go func(srv int, toSend *RequestVoteArgs) {
+		go func(srv int, msg *RequestVoteArgs) {
 			var reply = &RequestVoteReply{}
 			for {
 				this.mu.Lock()
-				if toSend.Term != this.currentTerm || this.role != CANDIDATE {
+				if msg.Term != this.currentTerm || this.role != CANDIDATE {
+					this.Debug(dTrace, "Stop send msg to fail node")
 					return
 				}
 				this.mu.Unlock()
-				Dprintf(this.me, dVote, "Sendto %d, msg: %v", srv, toSend)
 
-				ok := this.sendRequestVote(srv, toSend, reply)
+				Dprintf(this.me, dVote, "Sendto %d, msg: %v", srv, msg)
+				ok := this.sendRequestVote(srv, msg, reply)
+
 				if ok {
-					this.HandleVoteReply(reply)
-					break
+					this.HandleVoteReply(msg, &nVote, srv, reply)
+					return
+				} else {
+					Dprintf(this.me, dVote, "fail to send srv%d", srv)
 				}
-				Dprintf(this.me, dVote, "fail to send srv%d", srv)
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(80 * time.Millisecond)
 			}
-		}(srv, toSend)
+
+		}(srv, msg)
 	}
 
 }
@@ -286,24 +295,28 @@ func (this *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesRep
 	this.mu.Lock()
 	defer this.mu.Unlock()
 	this.Debug(dLog, "Recv apd req: %v", *args)
-	if args.Term > this.currentTerm {
-		this.Debug(dLog, "Term: convert 2 follower")
-		this.currentTerm = args.Term
-		this.SwitchRoleTo(FOLLOWER)
-	}
-
-	if this.role == CANDIDATE {
-		this.SwitchRoleTo(FOLLOWER)
-	}
-
-	this.ResetTimeout()
 
 	if args.Term < this.currentTerm {
-		this.Debug(dLog, "Term: return false")
+		this.Debug(dLog, "Term<: return false")
 		reply.Success = false
 		reply.Term = this.currentTerm
 		return
 	}
+
+	if args.Term > this.currentTerm {
+		this.Debug(dLog, "Term: convert 2 follower")
+		this.currentTerm = args.Term
+		this.voteFor = NONE
+		this.role = FOLLOWER
+	}
+	// todo 成为Follower 会要reset 吗
+	if this.role == CANDIDATE {
+		this.role = FOLLOWER
+	}
+	// 不可能是leader
+	Assert(this.me, false, this.role == LEADER, "Unexpect LEADER append request")
+
+	this.ResetTimeout()
 
 	if !this.matchPrevLog(args) {
 		this.Debug(dLog, "!match: return false")
@@ -351,8 +364,10 @@ func LogConflict(args *AppendEntriesArgs, myLogs []Log) bool {
 	if args.PrevLogIndex+1 >= len(myLogs) {
 		return false
 	}
-	if myLogs[args.PrevLogIndex+1].Term == args.Entries[0].Term {
-		return false
+	if args.Entries != nil {
+		if myLogs[args.PrevLogIndex+1].Term == args.Entries[0].Term {
+			return false
+		}
 	}
 	return true
 }
@@ -426,36 +441,39 @@ func (this *Raft) reSleep() bool {
 // The ticker go routine starts a new election if this peer hasn't received
 // heartsbeats recently.
 func (this *Raft) ticker() {
-	sleepTicks := math.MinInt32
+
 	for this.killed() == false {
-		debugTime := 0
+
 		rand.Seed(time.Now().UnixNano())
+		electionTimeout := rand.Intn(200) + 280
 
-		sleepTicks = rand.Intn(7) + 8
+		time.Sleep(time.Duration(electionTimeout) * time.Millisecond)
 
-		for sleepTicks != 0 {
-			switch this.reSleep() {
-			case true:
-				Dprintf(this.me, dTimer, "Resleep")
-				sleepTicks = rand.Intn(7) + 8
-			default:
-				sleepTicks--
-			}
-			debugTime += 40
-			time.Sleep(40 * time.Millisecond)
+		if this.reSleep() == true {
+			continue
 		}
 
 		this.mu.Lock()
-		if this.role == CANDIDATE || this.role == FOLLOWER {
-			this.Debug(dTimer, "start election timeout: %d ms", debugTime)
-			this.SwitchRoleTo(CANDIDATE)
+		if this.role == FOLLOWER || this.role == CANDIDATE {
+			this.StartElection()
 		}
 		this.mu.Unlock()
 
 	}
 }
+func (this *Raft) becomeCandidate() {
+	this.Debug(dVote, "Become candidate")
+	this.currentTerm++
+	this.voteFor = this.me
+	this.role = CANDIDATE
+	this.ResetTimeout()
+}
+
+//带锁调用, 启动peers 个reqvote 线程来处理投票
 func (this *Raft) StartElection() {
-	this.mu.Lock()
+	this.Debug(dTimer, "Election!")
+
+	this.becomeCandidate()
 
 	args := &RequestVoteArgs{
 		Term:         this.currentTerm,
@@ -464,124 +482,87 @@ func (this *Raft) StartElection() {
 		LastLogTerm:  0,
 	}
 
-	this.mu.Unlock()
-	go this.BoardCastReqVote(args)
+	this.BoardCastReqVote(args)
 }
 
-func (this *Raft) HandleVoteReply(vote *RequestVoteReply) {
+func (this *Raft) HandleVoteReply(msg *RequestVoteArgs, nVote *int32, srv int, reply *RequestVoteReply) {
 	this.mu.Lock()
 	defer this.mu.Unlock()
-	this.Debug(dVote, "Recv vote reply")
-	term := vote.Term
+
+	if this.role != CANDIDATE || this.currentTerm != msg.Term {
+		this.Debug(dWarn, "Not a candidate, Term stale")
+		return
+	}
+	this.Debug(dVote, "Recv reply from %d: %v", srv, reply)
+	term := reply.Term
 	if term > this.currentTerm {
 		this.currentTerm = term
-		this.SwitchRoleTo(FOLLOWER)
-		return
-	}
-
-	if this.role != CANDIDATE {
-		this.Debug(dWarn, "Not candidate: return")
-		return
-	}
-
-	if vote.VoteGranted == true {
-		this.nVote++
-	}
-
-	if this.nVote >= len(this.peers)/2+1 {
-		this.SwitchRoleTo(LEADER)
-	}
-
-}
-
-//持锁调用
-func (this *Raft) SwitchRoleTo(role Role) {
-	if role == this.role {
-		return
-	}
-
-	switch role {
-	case FOLLOWER:
-		this.Debug(dTrace, "Convert 2 FOLLOWER")
-		this.nVote = 0
 		this.voteFor = NONE
 		this.role = FOLLOWER
+		return
+	}
 
-		this.ResetTimeout()
-	case CANDIDATE:
-		this.Debug(dTrace, "Convert 2 CANDIDATE")
-		this.currentTerm++
-		this.voteFor = this.me
-		this.nVote = 0
-		this.nVote++
-		this.role = CANDIDATE
+	if reply.VoteGranted == true {
+		atomic.AddInt32(nVote, 1)
+	}
 
-		this.ResetTimeout()
-		go this.StartElection()
-	case LEADER:
-		this.Debug(dTrace, "Convert 2 LEADER")
-		this.role = LEADER
-		//初始化 leader
-		for i := range this.nextIndex {
-			this.nextIndex[i] = len(this.log)
+	if this.IsMajority((int)(*nVote)) {
+		if this.role != LEADER {
+			this.StartLeader()
 		}
-		for i := range this.matchIndex {
-			this.matchIndex[i] = 0
-		}
-		for i := range this.nCopyed {
-			this.nCopyed[i] = 0
-		}
-		this.Debug(dLeader, "LeaderInit: nextIndex:%v, matchIndex:%v, nCopyed:%v", this.nextIndex, this.matchIndex, this.nCopyed)
-		go this.StartLeader()
+	}
+
+}
+func (this *Raft) IsMajority(num int) bool {
+	if num >= (len(this.peers)/2 + 1) {
+		return true
+	} else {
+		return false
 	}
 }
 
-// HandleApdEntriesReply
+// HandleAppendEntriesReply
 //todo handle the apd entries reply
-func (this *Raft) HandleApdEntriesReply(aEntry *AppendEntriesReply, srv int, send *AppendEntriesArgs) {
+func (this *Raft) HandleAppendEntriesReply(reply *AppendEntriesReply, srv int, msg *AppendEntriesArgs) {
 	this.mu.Lock()
 	defer this.mu.Unlock()
 
-	if aEntry.Term > this.currentTerm {
-		this.Debug(dTerm, "Convert 2 Follower")
-		this.currentTerm = aEntry.Term
-		this.SwitchRoleTo(FOLLOWER)
+	if this.role != LEADER || this.currentTerm != msg.Term {
+		this.Debug(dWarn, "Not a leader, term stale")
 		return
 	}
 
-	if this.role != LEADER {
-		this.Debug(dVote, "Not a leader: return")
+	if reply.Term > this.currentTerm {
+		this.currentTerm = reply.Term
+		this.voteFor = NONE
+		this.role = FOLLOWER
 		return
 	}
 
-	if aEntry.Success == true {
-		this.nextIndex[srv] += len(send.Entries)
-		this.matchIndex[srv] = send.PrevLogIndex + len(send.Entries)
+	if reply.Success == true {
+		this.nextIndex[srv] += len(msg.Entries)
+		this.matchIndex[srv] = msg.PrevLogIndex + len(msg.Entries)
 		this.Debug(dLog, "Success reply After: mtchIdx: %d, nxtIdx:%d", this.matchIndex[srv], this.nextIndex[srv])
 		this.UpdateCommit(srv)
 	} else {
-		// 返回失败就两种原因,第一种就是因为term , 第二种就是因为prev 不匹配
 		//todo optimzation: backtraking nextIndex
 		this.nextIndex[srv]--
 	}
 }
 func (this *Raft) UpdateCommit(srv int) {
 	//nCopyed 只要比 nextIndex 大就行
-	n := len(this.nCopyed)
 
-	if this.nextIndex[srv] > n-1 {
-		incLen := this.matchIndex[srv] - len(this.nCopyed) + 1
-		this.nCopyed = append(this.nCopyed, make([]int, incLen)...)
-	} else {
-		this.nCopyed[this.matchIndex[srv]]++
-		this.Debug(dCommit, "matchIdx: %d, loglen:%d", this.matchIndex[srv], len(this.log))
-		if this.nCopyed[this.matchIndex[srv]] >= len(this.peers)/2+1 &&
-			this.log[this.matchIndex[srv]].Term == this.currentTerm {
-			//todo 不太确定要不要用max
-			this.Debug(dCommit, "cmitIdx: %d", this.commitIndex)
-			this.commitIndex = Max(this.commitIndex, this.matchIndex[srv])
-		}
+	growLogAt(this.nCopyed, this.matchIndex[srv])
+
+	this.nCopyed[this.matchIndex[srv]]++
+
+	if this.IsMajority(this.nCopyed[this.matchIndex[srv]]) &&
+		this.log[this.matchIndex[srv]].Term == this.currentTerm {
+		//todo 不太确定要不要用max
+		this.Debug(dCommit, "Update commitIdx : %d", this.commitIndex)
+		this.commitIndex = Max(this.commitIndex, this.matchIndex[srv])
 	}
+
 	if this.lastApplied < this.commitIndex {
 		this.Applier()
 	}
@@ -606,80 +587,85 @@ func (this *Raft) Applier() {
 
 	}
 }
-func (this *Raft) BoardCastApdEntries() {
+func (this *Raft) BoardCastAppenddEntries() {
+
+}
+
+//func (this *Raft) BeHeartBeat(srv int) bool {
+//	if this.nextIndex[srv] >= len(this.log) {
+//		return true
+//	}
+//	//todo 这个优化动画上有实现,注意实现正确性
+//	if this.nextIndex[srv] != this.matchIndex[srv]+1 {
+//		return true
+//	}
+//	return false
+//}
+
+func (this *Raft) StartLeader() {
+
+	this.becomeLeader()
+
 	for srv := range this.peers {
 		if srv == this.me {
 			continue
 		}
-
-		go func(srv int) {
-			var toSend *AppendEntriesArgs
-			var entries []Log
-			for {
-				this.mu.Lock()
-				if this.role != LEADER {
-					this.Debug(dLeader, "Not Leader, stop sending apd entries")
-					this.mu.Unlock()
-					return
-				}
-
-				if this.BeHeartBeat(srv) == true {
-					entries = nil
-				} else {
-					//todo optimization: batching logs
-					this.Debug(dLeader, "Have entry: nxtIdx: %d, mtchIdx: %d", this.nextIndex[srv], this.matchIndex[srv])
-					entries = make([]Log, 0)
-					entries = append(entries, this.log[this.nextIndex[srv]])
-				}
-				prevLogTerm := 0
-				if this.nextIndex[srv] <= len(this.log)-1 {
-					prevLogTerm = this.log[this.nextIndex[srv]-1].Term
-				}
-				toSend = &AppendEntriesArgs{
-					Term:         this.currentTerm,
-					LeaderId:     this.me,
-					PrevLogIndex: this.nextIndex[srv] - 1,
-					PrevLogTerm:  prevLogTerm,
-					Entries:      entries,
-					LeaderCommit: this.commitIndex,
-				}
-				reply := &AppendEntriesReply{}
-				this.Debug(dLeader, "sendTo:%d, msg:%v", srv, toSend)
-				this.mu.Unlock()
-
-				ok := this.sendAppendEntries(srv, toSend, reply)
-
-				if ok {
-					//todo:[refactor]: ticket pool when apd entries
-					this.HandleApdEntriesReply(reply, srv, toSend)
-					break
-				}
-				Dprintf(this.me, dLeader, "Fail to send %d", srv)
-			}
-		}(srv)
+		go this.SyncAppendEntries(srv)
 	}
+
 }
-func (this *Raft) BeHeartBeat(srv int) bool {
-	if this.nextIndex[srv] >= len(this.log) {
-		return true
-	}
-	//todo 这个优化动画上有实现,注意实现正确性
-	if this.nextIndex[srv] != this.matchIndex[srv]+1 {
-		return true
-	}
-	return false
-}
+func (this *Raft) SyncAppendEntries(srv int) {
+	this.mu.Lock()
+	var msg *AppendEntriesArgs
+	Assert(this.me, true, this.nextIndex[srv] <= len(this.log), "Exceed nextIdx")
 
-func (this *Raft) StartLeader() {
-	for this.killed() == false {
+	// todo : optimaztion: Entries
+	msg = &AppendEntriesArgs{
+		Term:         this.currentTerm,
+		LeaderId:     this.me,
+		PrevLogIndex: this.nextIndex[srv] - 1,
+		PrevLogTerm:  this.log[this.nextIndex[srv]-1].Term,
+		Entries:      this.log[this.nextIndex[srv]:],
+		LeaderCommit: this.commitIndex,
+	}
+	this.mu.Unlock()
+
+	for {
 		this.mu.Lock()
-		if this.role != LEADER {
+		if this.role != LEADER || msg.Term != this.currentTerm {
+			this.Debug(dLeader, "Not Leader, Term stale")
 			this.mu.Unlock()
 			return
 		}
 		this.mu.Unlock()
-		go this.BoardCastApdEntries()
+
+		reply := &AppendEntriesReply{}
+		this.Debug(dLeader, "sendTo:%d, msg:%v", srv, msg)
+
+		ok := this.sendAppendEntries(srv, msg, reply)
+
+		if ok {
+			//todo:[refactor]: ticket pool when apd entries
+			this.HandleAppendEntriesReply(reply, srv, msg)
+			return
+		}
+		Dprintf(this.me, dLeader, "Fail to send %d", srv)
 		time.Sleep(this.heartBeatElapse)
+	}
+
+}
+func (this *Raft) becomeLeader() {
+	this.Debug(dTrace, "Become LEADER")
+	this.role = LEADER
+	//初始化 leader
+	for i := range this.nextIndex {
+		this.nextIndex[i] = len(this.log)
+	}
+	for i := range this.matchIndex {
+		this.matchIndex[i] = 0
+	}
+	for i := range this.nCopyed {
+		this.nCopyed[i] = 0
 	}
 }
 
@@ -715,7 +701,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 		rf.nextIndex[i] = 1
 	}
 	rf.matchIndex = make([]int, len(peers))
-	rf.nVote = 0
 	rf.role = FOLLOWER
 	rf.heartBeatElapse = 100 * time.Millisecond
 	rf.nCopyed = make([]int, 20)

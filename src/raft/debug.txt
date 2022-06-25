@@ -1,0 +1,94 @@
+Test (2A): election after network failure ...
+##003415 [TIMR] S2 -1 (StartElection:474)Election!
+##003418 [VOTE] S2 -1 (becomeCandidate:465)Become candidate
+##003428 [VOTE] (func1:278)Sendto 1, msg: &{2 2 0 0}
+##003429 [VOTE] (func1:278)Sendto 0, msg: &{2 2 0 0}
+003466 [VOTE] S0 -1 (RequestVote:204)Recv voteReq: {2 2 0 0}
+#003467 [VOTE] S1 -1 (RequestVote:204)Recv voteReq: {2 2 0 0}
+003468 [VOTE] S0 -2 (RequestVote:219)Granted vote
+#003468 [VOTE] S1 -2 (RequestVote:219)Granted vote
+##003475 [VOTE] S2 -2 (HandleVoteReply:496)Recv reply from 0: &{2 true}
+##003476 [TRCE] S2 -2 (becomeLeader:658)Become LEADER
+##003481 [LEAD] S2*-2 (SyncAppendEntries:643)sendTo:1, msg:&{2 2 0 0 [] 0}
+##003482 [WARN] S2*-2 (HandleVoteReply:493)Not a candidate, Term stale
+##003485 [LEAD] S2*-2 (SyncAppendEntries:643)sendTo:0, msg:&{2 2 0 0 [] 0}
+003509 [LOG1] S0 -2 (AppendEntries:297)Recv apd req: {2 2 0 0 [] 0}
+#003510 [LOG1] S1 -2 (AppendEntries:297)Recv apd req: {2 2 0 0 [] 0}
+#003512 [LOG1] S1 -2 (AppendEntries:327)Before append:[{0 <nil>}]
+003511 [LOG1] S0 -2 (AppendEntries:327)Before append:[{0 <nil>}]
+#003513 [LOG1] S1 -2 (AppendEntries:334)After append:[{0 <nil>}]
+003514 [LOG1] S0 -2 (AppendEntries:334)After append:[{0 <nil>}]
+##003531 [LOG1] S2*-2 (HandleAppendEntriesReply:545)Success reply After: mtchIdx: 0, nxtIdx:1
+##003533 [LOG1] S2*-2 (HandleAppendEntriesReply:545)Success reply After: mtchIdx: 0, nxtIdx:1
+007564 [TIMR] S0 -2 (StartElection:474)Election!
+007568 [VOTE] S0 -2 (becomeCandidate:465)Become candidate
+007576 [VOTE] (func1:278)Sendto 2, msg: &{3 0 0 0}
+007575 [VOTE] (func1:278)Sendto 1, msg: &{3 0 0 0}
+#007592 [VOTE] S1 -2 (RequestVote:204)Recv voteReq: {3 0 0 0}
+#007594 [VOTE] S1 -3 (RequestVote:219)Granted vote
+007603 [VOTE] S0 -3 (HandleVoteReply:496)Recv reply from 1: &{3 true}
+007604 [TRCE] S0 -3 (becomeLeader:658)Become LEADER
+007609 [LEAD] S0*-3 (SyncAppendEntries:643)sendTo:2, msg:&{3 0 0 0 [] 0}
+007609 [LEAD] S0*-3 (SyncAppendEntries:643)sendTo:1, msg:&{3 0 0 0 [] 0}
+#007627 [LOG1] S1 -3 (AppendEntries:297)Recv apd req: {3 0 0 0 [] 0}
+#007629 [LOG1] S1 -3 (AppendEntries:327)Before append:[{0 <nil>}]
+#007630 [LOG1] S1 -3 (AppendEntries:334)After append:[{0 <nil>}]
+007636 [LOG1] S0*-3 (HandleAppendEntriesReply:545)Success reply After: mtchIdx: 0, nxtIdx:1
+#011522 [TIMR] S1 -3 (StartElection:474)Election!
+#011524 [VOTE] S1 -3 (becomeCandidate:465)Become candidate
+#011529 [VOTE] (func1:278)Sendto 0, msg: &{4 1 0 0}
+#011530 [VOTE] (func1:278)Sendto 2, msg: &{4 1 0 0}
+011546 [VOTE] S0*-3 (RequestVote:204)Recv voteReq: {4 1 0 0}
+011547 [VOTE] S0 -4 (RequestVote:219)Granted vote
+##011546 [VOTE] S2*-2 (RequestVote:204)Recv voteReq: {4 1 0 0}
+##011549 [VOTE] S2 -4 (RequestVote:219)Granted vote
+#011555 [VOTE] S1 -4 (HandleVoteReply:496)Recv reply from 0: &{4 true}
+#011557 [TRCE] S1 -4 (becomeLeader:658)Become LEADER
+#011561 [WARN] S1*-4 (HandleVoteReply:493)Not a candidate, Term stale
+#011561 [LEAD] S1*-4 (SyncAppendEntries:643)sendTo:2, msg:&{4 1 0 0 [] 0}
+#011563 [LEAD] S1*-4 (SyncAppendEntries:643)sendTo:0, msg:&{4 1 0 0 [] 0}
+##011576 [LOG1] S2 -4 (AppendEntries:297)Recv apd req: {4 1 0 0 [] 0}
+011576 [LOG1] S0 -4 (AppendEntries:297)Recv apd req: {4 1 0 0 [] 0}
+##011577 [LOG1] S2 -4 (AppendEntries:327)Before append:[{0 <nil>}]
+011577 [LOG1] S0 -4 (AppendEntries:327)Before append:[{0 <nil>}]
+##011578 [LOG1] S2 -4 (AppendEntries:334)After append:[{0 <nil>}]
+011579 [LOG1] S0 -4 (AppendEntries:334)After append:[{0 <nil>}]
+#011585 [LOG1] S1*-4 (HandleAppendEntriesReply:545)Success reply After: mtchIdx: 0, nxtIdx:1
+#011587 [LOG1] S1*-4 (HandleAppendEntriesReply:545)Success reply After: mtchIdx: 0, nxtIdx:1
+##016430 [TIMR] S2 -4 (StartElection:474)Election!
+##016434 [VOTE] S2 -4 (becomeCandidate:465)Become candidate
+##016450 [VOTE] (func1:278)Sendto 1, msg: &{5 2 0 0}
+##016451 [VOTE] (func1:278)Sendto 0, msg: &{5 2 0 0}
+018492 [LEAD] (SyncAppendEntries:652)Fail to send 2
+019500 [LEAD] S0 -4 (SyncAppendEntries:636)Not Leader, Term stale
+020416 [TIMR] S0 -4 (StartElection:474)Election!
+020421 [VOTE] S0 -4 (becomeCandidate:465)Become candidate
+020439 [VOTE] (func1:278)Sendto 1, msg: &{5 0 0 0}
+020438 [VOTE] (func1:278)Sendto 2, msg: &{5 0 0 0}
+##023564 [TIMR] S2 -5 (StartElection:474)Election!
+##023565 [VOTE] S2 -5 (becomeCandidate:465)Become candidate
+##023571 [VOTE] (func1:278)Sendto 1, msg: &{6 2 0 0}
+##023571 [VOTE] (func1:278)Sendto 0, msg: &{6 2 0 0}
+026411 [TIMR] S0 -5 (StartElection:474)Election!
+026416 [VOTE] S0 -5 (becomeCandidate:465)Become candidate
+026430 [VOTE] (func1:278)Sendto 2, msg: &{6 0 0 0}
+026431 [VOTE] (func1:278)Sendto 1, msg: &{6 0 0 0}
+027402 [VOTE] (func1:285)fail to send srv2
+027746 [VOTE] (func1:285)fail to send srv2
+028208 [TRCE] S0 -6 (func1:273)Stop send msg to fail node
+##032808 [TIMR] S2 -6 (StartElection:474)Election!
+##032809 [VOTE] S2 -6 (becomeCandidate:465)Become candidate
+##032813 [VOTE] (func1:278)Sendto 0, msg: &{7 2 0 0}
+##032813 [VOTE] (func1:278)Sendto 1, msg: &{7 2 0 0}
+035254 [VOTE] (func1:285)fail to send srv1
+##037077 [VOTE] (func1:285)fail to send srv0
+##037886 [TRCE] S2 -7 (func1:273)Stop send msg to fail node
+##053076 [VOTE] (func1:285)fail to send srv1
+056074 [VOTE] (func1:285)fail to send srv1
+##073336 [VOTE] (func1:285)fail to send srv1
+076412 [VOTE] (func1:285)fail to send srv2
+##080259 [VOTE] (func1:285)fail to send srv0
+##089551 [VOTE] (func1:285)fail to send srv0
+##100349 [VOTE] (func1:285)fail to send srv1
+signal: interrupt
+FAIL	6.824/raft	17.674s
