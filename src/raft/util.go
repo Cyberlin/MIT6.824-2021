@@ -4,42 +4,34 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// Debugging
-const debug = false
-
 type logTopic string
+
+const (
+	dLog       logTopic = "LOG"  // AppendEntries
+	dVote      logTopic = "VOTE" // RequestVote
+	dElection  logTopic = "ELCT"
+	dHeartbeat logTopic = "HRBT"
+	dClient    logTopic = "CLNT"
+	dCommit    logTopic = "CMIT"
+	dLeader    logTopic = "LEAD"
+	dPersist   logTopic = "PERS"
+	dSnapshot  logTopic = "SNAP"
+
+	dTrace logTopic = "TRACE"
+	dInfo  logTopic = "INFO"
+	dWarn  logTopic = "WARN"
+	dError logTopic = "ERROR"
+	dFatal logTopic = "FATAL"
+)
 
 var debugStart time.Time
 var debugVerbosity int
 
-const (
-	dClient  logTopic = "CLNT"
-	dCommit  logTopic = "CMIT"
-	dDrop    logTopic = "DROP"
-	dError   logTopic = "ERRO"
-	dInfo    logTopic = "INFO"
-	dLeader  logTopic = "LEAD"
-	dLog     logTopic = "LOG1"
-	dLog2    logTopic = "LOG2"
-	dPersist logTopic = "PERS"
-	dSnap    logTopic = "SNAP"
-	dTerm    logTopic = "TERM"
-	dTest    logTopic = "TEST"
-	dTimer   logTopic = "TIMR"
-	dTrace   logTopic = "TRCE"
-	dVote    logTopic = "VOTE"
-	dWarn    logTopic = "WARN"
-)
-const padding = "#"
-
-// Retrieve the verbosity level from an environment variable
 func getVerbosity() int {
 	v := os.Getenv("VERBOSE")
 	level := 0
@@ -59,84 +51,51 @@ func init() {
 
 	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
 }
-func getInvokerLocation(skipNumber int) string {
-	pc, _, line, ok := runtime.Caller(skipNumber)
-	if !ok {
-		return ""
-	}
 
-	funcPath := ""
-	funcPtr := runtime.FuncForPC(pc)
-	if funcPtr != nil {
-		funcPath = funcPtr.Name()
-	}
-	nameArr := strings.Split(funcPath, ".")
-	realFunc := nameArr[len(nameArr)-1]
-	return fmt.Sprintf("(%s:%d)", realFunc, line)
-}
-func (this *Raft) Debug(topic logTopic, format string, a ...interface{}) {
-	if debugVerbosity < 1 {
-		return
-	}
-
-	time := time.Since(debugStart).Microseconds()
-	time /= 100
-	tag := fmt.Sprintf("[%s]", string(topic))
-	idMark := " "
-	if this.role == LEADER {
-		idMark = "*"
-	}
-	paddings := strings.Repeat(padding, this.me)
-	invorkPlace := getInvokerLocation(2)
-	prefix := fmt.Sprintf("%s%06d %v S%d%s-%d %s", paddings,
-		time, tag, this.me, idMark, this.currentTerm, invorkPlace)
-
-	format = prefix + format
-	log.Printf(format, a...)
-}
-func Dprintf(me int, topic logTopic, format string, a ...interface{}) {
-	if debugVerbosity >= 1 {
-		time := time.Since(debugStart).Microseconds()
-		time /= 100
-		tag := fmt.Sprintf("[%s]", string(topic))
-		paddings := strings.Repeat(padding, me)
-		invorkPlace := getInvokerLocation(2)
-		prefix := fmt.Sprintf("%s%06d %v %s", paddings, time, tag, invorkPlace)
-		format = prefix + format
-		log.Printf(format, a...)
-	}
-}
-func Assert(me int, expect interface{}, val interface{}, note string) {
-	if debugVerbosity >= 1 {
-		if val != expect {
-			time := time.Since(debugStart).Microseconds()
-			time /= 100
-
-			tag := "[ASSERT]"
-			paddings := strings.Repeat(padding, me)
-			invorkPlace := getInvokerLocation(2)
-			prefix := fmt.Sprintf("%s%06d %v %s", paddings, time, tag, invorkPlace)
-			note = prefix + note
-
-			log.Panicln(note)
+func (rf *Raft) FormatLog() string {
+	if debugVerbosity > 1 {
+		s := ""
+		for i := 1; i < len(rf.log); i++ {
+			s += fmt.Sprintf("%v ", rf.log[i])
 		}
+		return s
+	} else {
+		return "require getVerbosity() > 1"
 	}
 }
-func Min(nums ...int) int {
-	sort.Slice(nums, func(i, j int) bool {
-		return nums[i] < nums[j]
-	})
-	return nums[0]
-}
-func Max(nums ...int) int {
-	sort.Slice(nums, func(i, j int) bool {
-		return nums[i] > nums[j]
-	})
-	return nums[0]
-}
-func growLogAt(src []int, index int) {
-	if index > len(src)-1 {
-		inc := make([]int, 2*(index-len(src)+1))
-		src = append(src, inc...)
+
+func (rf *Raft) FormatFullLog() string {
+	if debugVerbosity > 1 {
+		return fmt.Sprintf("%s %s", rf.log[0], rf.FormatLog())
+	} else {
+		return "require getVerbosity() > 1"
 	}
+}
+
+func (rf *Raft) FormatState() string {
+	return fmt.Sprintf("%s  full log: %v", rf.FormatStateOnly(), rf.log)
+}
+
+func (rf *Raft) FormatStateOnly() string {
+	return fmt.Sprintf("commitIndex=%d lastApplied=%d nextIndex=%v matchIndex=%v", rf.commitIndex, rf.lastApplied, rf.nextIndex, rf.matchIndex)
+}
+
+const Padding = "    "
+
+func (rf *Raft) Debug(topic logTopic, format string, a ...interface{}) {
+	if debugVerbosity > 0 {
+		log.Print(rf.Sdebug(topic, format, a...))
+	}
+}
+
+func (rf *Raft) Sdebug(topic logTopic, format string, a ...interface{}) string {
+	preamble := strings.Repeat(Padding, rf.me)
+	epilogue := strings.Repeat(Padding, len(rf.peers)-rf.me-1)
+	prefix := fmt.Sprintf("%s%s %-5s [%s t%02d S%d] %s", preamble, Microseconds(time.Now()), string(topic), rf.state, rf.term, rf.me, epilogue)
+	format = prefix + format
+	return fmt.Sprintf(format, a...)
+}
+
+func Microseconds(t time.Time) string {
+	return fmt.Sprintf("%06d", t.Sub(debugStart).Microseconds()/100)
 }
