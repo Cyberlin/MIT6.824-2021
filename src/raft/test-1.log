@@ -1,0 +1,364 @@
+=== RUN   TestReElection2A
+000002 TRACE S0 needReplicate: nextIndex=[1 1 1]  log tail {0 t0 <nil>}
+000003 TRACE S0 needReplicate: nextIndex=[1 1 1]  log tail {0 t0 <nil>}
+000003 TRACE S0 needApply: commitIndex=0 lastApplied=0
+000003 TRACE S1 needReplicate: nextIndex=[1 1 1]  log tail {0 t0 <nil>}
+000003 TRACE S2 needApply: commitIndex=0 lastApplied=0
+000003 TRACE S1 needApply: commitIndex=0 lastApplied=0
+Test (2A): election after network failure ...
+000003 TRACE S2 needReplicate: nextIndex=[1 1 1]  log tail {0 t0 <nil>}
+000003 TRACE S2 needReplicate: nextIndex=[1 1 1]  log tail {0 t0 <nil>}
+000003 TRACE S1 needReplicate: nextIndex=[1 1 1]  log tail {0 t0 <nil>}
+005219 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+005225 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+005227 ELCT S1 electionTimeout 534ms elapsed, turning to Candidate
+005229 VOTE S2 RequestVote 1 votedFor=<nil>%!(EXTRA *raft.RequestVoteArgs=&{1 1 0 0})
+005231 VOTE S2 received term 1 > currentTerm 0, back to Follower
+005231 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+005231 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+005232 ELCT S1 S2 RequestVoteReply {Term:0 VoteGranted:true} rf.term=1 args.Term=1
+005232 ELCT S1 <- S2 vote received
+005233 LEAD S1 majority vote (2/3) received, turning Leader  commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]  full log: [{0 t0 <nil>}]
+005233 HRBT S1 BroadcastHeartbeat start
+005233 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+005229 VOTE S0 RequestVote 1 votedFor=<nil>%!(EXTRA *raft.RequestVoteArgs=&{1 1 0 0})
+005234 VOTE S0 received term 1 > currentTerm 0, back to Follower
+005234 PERS S0 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+005235 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+005235 PERS S0 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+005236 ELCT S1 S0 RequestVoteReply {Term:0 VoteGranted:true} rf.term=1 args.Term=1
+005236 LOG S0 receive AppendEntries from S1 args.term=1 &{Term:1 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+005237 LOG S0 finish process heartbeat: commitIndex=0
+005234 LOG S2 receive AppendEntries from S1 args.term=1 &{Term:1 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+005237 LOG S2 finish process heartbeat: commitIndex=0
+005238 HRBT S1 S0 AppendEntriesReply {Term:1 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+005239 HRBT S1 S2 AppendEntriesReply {Term:1 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+006036 HRBT S1 BroadcastHeartbeat start
+006036 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+006037 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+006040 LOG S0 receive AppendEntries from S1 args.term=1 &{Term:1 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+006040 LOG S0 finish process heartbeat: commitIndex=0
+006040 LOG S2 receive AppendEntries from S1 args.term=1 &{Term:1 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+006041 LOG S2 finish process heartbeat: commitIndex=0
+006041 HRBT S1 S2 AppendEntriesReply {Term:1 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+006042 HRBT S1 S0 AppendEntriesReply {Term:1 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+007045 HRBT S1 BroadcastHeartbeat start
+007046 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+007048 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+007048 LOG S2 receive AppendEntries from S1 args.term=1 &{Term:1 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+007048 LOG S2 finish process heartbeat: commitIndex=0
+007048 HRBT S1 S2 AppendEntriesReply {Term:1 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+007049 LOG S0 receive AppendEntries from S1 args.term=1 &{Term:1 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+007049 LOG S0 finish process heartbeat: commitIndex=0
+007051 HRBT S1 S0 AppendEntriesReply {Term:1 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+008055 HRBT S1 BroadcastHeartbeat start
+008056 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+008057 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+008058 LOG S2 receive AppendEntries from S1 args.term=1 &{Term:1 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+008058 LOG S2 finish process heartbeat: commitIndex=0
+008058 LOG S0 receive AppendEntries from S1 args.term=1 &{Term:1 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+008058 LOG S0 finish process heartbeat: commitIndex=0
+008058 HRBT S1 S2 AppendEntriesReply {Term:1 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+008059 HRBT S1 S0 AppendEntriesReply {Term:1 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+009064 HRBT S1 BroadcastHeartbeat start
+009064 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+009065 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+009067 LOG S2 receive AppendEntries from S1 args.term=1 &{Term:1 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+009067 LOG S2 finish process heartbeat: commitIndex=0
+009067 LOG S0 receive AppendEntries from S1 args.term=1 &{Term:1 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+009068 LOG S0 finish process heartbeat: commitIndex=0
+009068 HRBT S1 S2 AppendEntriesReply {Term:1 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+009069 HRBT S1 S0 AppendEntriesReply {Term:1 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+010073 HRBT S1 BroadcastHeartbeat start
+010074 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+010074 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+011084 HRBT S1 BroadcastHeartbeat start
+011085 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+011087 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+012086 HRBT S1 BroadcastHeartbeat start
+012086 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+012087 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+013090 HRBT S1 BroadcastHeartbeat start
+013091 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+013092 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+014101 HRBT S1 BroadcastHeartbeat start
+014101 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+014102 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+015105 HRBT S1 BroadcastHeartbeat start
+015106 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+015107 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+016108 HRBT S1 BroadcastHeartbeat start
+016108 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+016108 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+017088 PERS S0 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+017089 PERS S0 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+017089 ELCT S0 electionTimeout 546ms elapsed, turning to Candidate
+017090 VOTE S2 RequestVote 0 votedFor=S1
+017091 VOTE S2 received term 2 > currentTerm 1, back to Follower
+017091 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+017091 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+017093 ELCT S0 S2 RequestVoteReply {Term:1 VoteGranted:true} rf.term=2 args.Term=2
+017094 ELCT S0 <- S2 vote received
+017094 LEAD S0 majority vote (2/3) received, turning Leader  commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]  full log: [{0 t0 <nil>}]
+017094 HRBT S0 BroadcastHeartbeat start
+017094 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+017095 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+017095 LOG S2 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+017096 LOG S2 finish process heartbeat: commitIndex=0
+017097 HRBT S0 S2 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+017118 HRBT S1 BroadcastHeartbeat start
+017119 HRBT S0 BroadcastHeartbeat start
+017120 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+017119 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+017122 LOG S2 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+017122 LOG S2 finish process heartbeat: commitIndex=0
+017122 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+017124 HRBT S0 S2 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+017121 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+018120 HRBT S0 BroadcastHeartbeat start
+018121 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+018121 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+018122 HRBT S1 BroadcastHeartbeat start
+018122 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+018123 LOG S2 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+018124 LOG S2 finish process heartbeat: commitIndex=0
+018125 HRBT S0 S2 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+018124 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+019129 HRBT S1 BroadcastHeartbeat start
+019129 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+019130 HRBT S0 BroadcastHeartbeat start
+019130 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+019130 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+019131 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+019132 LOG S2 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+019132 LOG S2 finish process heartbeat: commitIndex=0
+019134 HRBT S0 S2 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+020142 HRBT S1 BroadcastHeartbeat start
+020143 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+020143 HRBT S0 BroadcastHeartbeat start
+020144 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+020144 LOG S2 received term 1 < currentTerm 2 from S1, reject AppendEntries
+020144 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+020145 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+020145 HRBT S1 S2 AppendEntriesReply {Term:2 Success:false ConflictingTerm:0 ConflictingIndex:0} rf.term=1 args.Term=1
+020145 HRBT S1 return to Follower due to reply.Term > rf.term
+020145 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+020145 LOG S2 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+020146 LOG S2 finish process heartbeat: commitIndex=0
+020146 LOG S0 received term 1 < currentTerm 2 from S1, reject AppendEntries
+020147 LOG S1 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+020147 LOG S1 finish process heartbeat: commitIndex=0
+020147 HRBT S0 S2 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+020147 HRBT S1 S0 AppendEntriesReply {Term:2 Success:false ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=1
+020147 HRBT S1 S0 AppendEntriesReply rejected since rf.term(2) != args.Term(1)
+020148 HRBT S0 S1 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+021145 HRBT S0 BroadcastHeartbeat start
+021145 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+021146 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+021147 LOG S1 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+021147 LOG S1 finish process heartbeat: commitIndex=0
+021147 LOG S2 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+021147 LOG S2 finish process heartbeat: commitIndex=0
+021148 HRBT S0 S2 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+021149 HRBT S0 S1 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+022158 HRBT S0 BroadcastHeartbeat start
+022159 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+022159 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+022161 LOG S2 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+022162 LOG S2 finish process heartbeat: commitIndex=0
+022161 LOG S1 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+022162 LOG S1 finish process heartbeat: commitIndex=0
+022162 HRBT S0 S2 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+022163 HRBT S0 S1 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+023165 HRBT S0 BroadcastHeartbeat start
+023165 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+023166 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+023167 LOG S2 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+023167 LOG S2 finish process heartbeat: commitIndex=0
+023167 LOG S1 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+023167 LOG S1 finish process heartbeat: commitIndex=0
+023168 HRBT S0 S1 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+023168 HRBT S0 S2 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+024182 HRBT S0 BroadcastHeartbeat start
+024183 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+024184 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+024185 LOG S2 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+024185 LOG S2 finish process heartbeat: commitIndex=0
+024186 HRBT S0 S2 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+024187 LOG S1 receive AppendEntries from S0 args.term=2 &{Term:2 LeaderId:0 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+024187 LOG S1 finish process heartbeat: commitIndex=0
+024189 HRBT S0 S1 AppendEntriesReply {Term:2 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+025191 HRBT S0 BroadcastHeartbeat start
+025191 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+025192 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+026204 HRBT S0 BroadcastHeartbeat start
+026205 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+026207 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+027212 HRBT S0 BroadcastHeartbeat start
+027213 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+027214 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+028221 HRBT S0 BroadcastHeartbeat start
+028222 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+028222 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+029233 HRBT S0 BroadcastHeartbeat start
+029233 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+029234 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+030241 HRBT S0 BroadcastHeartbeat start
+030243 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+030244 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+031248 HRBT S0 BroadcastHeartbeat start
+031248 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+031248 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+031996 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+031997 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+031997 ELCT S1 electionTimeout 571ms elapsed, turning to Candidate
+032254 HRBT S0 BroadcastHeartbeat start
+032254 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+032255 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+033266 HRBT S0 BroadcastHeartbeat start
+033268 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+033268 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+034276 HRBT S0 BroadcastHeartbeat start
+034277 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+034277 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+035163 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+035165 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+035165 ELCT S2 electionTimeout 559ms elapsed, turning to Candidate
+035279 HRBT S0 BroadcastHeartbeat start
+035279 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+035280 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+036292 HRBT S0 BroadcastHeartbeat start
+036293 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+036294 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+037301 HRBT S0 BroadcastHeartbeat start
+037301 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+037302 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+037719 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+037720 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+037720 ELCT S1 electionTimeout 509ms elapsed, turning to Candidate
+038305 HRBT S0 BroadcastHeartbeat start
+038305 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+038306 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+039310 HRBT S0 BroadcastHeartbeat start
+039310 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+039311 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+040318 HRBT S0 BroadcastHeartbeat start
+040319 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+040319 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+040764 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+040764 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+040764 ELCT S2 electionTimeout 556ms elapsed, turning to Candidate
+041323 HRBT S0 BroadcastHeartbeat start
+041324 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+041324 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+042329 HRBT S0 BroadcastHeartbeat start
+042330 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+042331 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+042812 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+042812 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+042812 ELCT S1 electionTimeout 582ms elapsed, turning to Candidate
+043337 HRBT S0 BroadcastHeartbeat start
+043337 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+043338 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+044338 HRBT S0 BroadcastHeartbeat start
+044339 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+044339 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+045343 HRBT S0 BroadcastHeartbeat start
+045344 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+045344 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+046344 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+046345 HRBT S0 BroadcastHeartbeat start
+046345 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+046345 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+046346 ELCT S2 electionTimeout 591ms elapsed, turning to Candidate
+046346 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+046348 VOTE S1 RequestVote 2 votedFor=S1
+046349 ELCT S2 S1 RequestVoteReply {Term:5 VoteGranted:false} rf.term=5 args.Term=5
+047349 HRBT S0 BroadcastHeartbeat start
+047350 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+047350 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+048354 HRBT S0 BroadcastHeartbeat start
+048356 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+048356 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+048644 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+048644 PERS S1 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+048644 ELCT S1 electionTimeout 509ms elapsed, turning to Candidate
+048646 VOTE S2 RequestVote 1 votedFor=S2
+048646 VOTE S2 received term 6 > currentTerm 5, back to Follower
+048646 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+048646 PERS S2 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+048647 ELCT S1 S2 RequestVoteReply {Term:5 VoteGranted:true} rf.term=6 args.Term=6
+048647 ELCT S1 <- S2 vote received
+048647 LEAD S1 majority vote (2/3) received, turning Leader  commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]  full log: [{0 t0 <nil>}]
+048647 HRBT S1 BroadcastHeartbeat start
+048648 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+048648 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+048649 LOG S2 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+048650 LOG S2 finish process heartbeat: commitIndex=0
+048651 HRBT S1 S2 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+049360 HRBT S0 BroadcastHeartbeat start
+049361 HRBT S1 BroadcastHeartbeat start
+049361 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+049362 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+049362 WARN S0 replicate S1 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+049363 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+049364 LOG S2 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+049366 LOG S2 finish process heartbeat: commitIndex=0
+049367 HRBT S1 S2 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+050366 HRBT S1 BroadcastHeartbeat start
+050366 HRBT S0 BroadcastHeartbeat start
+050367 WARN S0 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+050366 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+050368 LOG S2 received term 2 < currentTerm 6 from S0, reject AppendEntries
+050369 HRBT S0 S2 AppendEntriesReply {Term:6 Success:false ConflictingTerm:0 ConflictingIndex:0} rf.term=2 args.Term=2
+050369 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+050369 LOG S2 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+050369 LOG S2 finish process heartbeat: commitIndex=0
+050370 HRBT S1 S2 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+050369 HRBT S0 return to Follower due to reply.Term > rf.term
+050371 PERS S0 persist: commitIndex=0 lastApplied=0 nextIndex=[1 1 1] matchIndex=[0 0 0]
+050372 LOG S0 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+050372 LOG S0 finish process heartbeat: commitIndex=0
+050372 HRBT S1 S0 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+051376 HRBT S1 BroadcastHeartbeat start
+051376 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+051376 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+051378 LOG S2 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+051378 LOG S2 finish process heartbeat: commitIndex=0
+051378 LOG S0 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+051379 LOG S0 finish process heartbeat: commitIndex=0
+051380 HRBT S1 S2 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+051381 HRBT S1 S0 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+052385 HRBT S1 BroadcastHeartbeat start
+052386 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+052386 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+052387 LOG S2 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+052388 LOG S2 finish process heartbeat: commitIndex=0
+052387 LOG S0 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+052388 LOG S0 finish process heartbeat: commitIndex=0
+052389 HRBT S1 S2 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+052390 HRBT S1 S0 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+053386 HRBT S1 BroadcastHeartbeat start
+053386 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+053386 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+053387 LOG S2 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+053388 LOG S2 finish process heartbeat: commitIndex=0
+053388 HRBT S1 S2 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+053387 LOG S0 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+053389 LOG S0 finish process heartbeat: commitIndex=0
+053389 HRBT S1 S0 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+054391 HRBT S1 BroadcastHeartbeat start
+054393 WARN S1 replicate S2 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+054393 WARN S1 replicate S0 nextIndex=[1 1 1] matchIndex=[0 0 0] prevLog: {0 t0 <nil>}
+054395 LOG S2 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+054395 LOG S2 finish process heartbeat: commitIndex=0
+054396 HRBT S1 S2 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+054395 LOG S0 receive AppendEntries from S1 args.term=6 &{Term:6 LeaderId:1 PrevLogIndex:0 PrevLogTerm:0 Entries:[] LeaderCommit:0}
+054396 LOG S0 finish process heartbeat: commitIndex=0
+054397 HRBT S1 S0 AppendEntriesReply {Term:6 Success:true ConflictingTerm:0 ConflictingIndex:0} rf.term=6 args.Term=6
+  ... Passed --   5.5  3  133   26956    0
+--- PASS: TestReElection2A (5.47s)
+PASS
+real 5.47
+user 0.02
+sys 0.03

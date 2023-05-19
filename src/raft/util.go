@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -89,11 +88,18 @@ func (rf *Raft) Debug(topic logTopic, format string, a ...interface{}) {
 }
 
 func (rf *Raft) Sdebug(topic logTopic, format string, a ...interface{}) string {
-	preamble := strings.Repeat(Padding, rf.me)
-	epilogue := strings.Repeat(Padding, len(rf.peers)-rf.me-1)
-	prefix := fmt.Sprintf("%s%s %-5s [%s t%02d S%d] %s", preamble, Microseconds(time.Now()), string(topic), rf.state, rf.term, rf.me, epilogue)
+	//preamble := strings.Repeat(Padding, rf.me)
+	//epilogue := strings.Repeat(Padding, len(rf.peers)-rf.me-1)
+	//prefix := fmt.Sprintf("%s%s %-5s [%s t%02d S%d] %s", preamble, Microseconds(time.Now()), string(topic), rf.state, rf.term, rf.me, epilogue)
+	//format = prefix + format
+	//return fmt.Sprintf(format, a...)
+
+	time := time.Since(debugStart).Microseconds()
+	time /= 100
+	prefix := fmt.Sprintf("%06d %v S%d ", time, string(topic), rf.me)
 	format = prefix + format
 	return fmt.Sprintf(format, a...)
+
 }
 
 func Microseconds(t time.Time) string {

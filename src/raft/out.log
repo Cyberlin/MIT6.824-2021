@@ -1,0 +1,20 @@
+008258 LOG2 S2 Saved Log (-1, 0) [{<nil> 0}]
+008256 VOTE S3 Granting Vote to S1 at T1
+008258 VOTE S1 <- S0 Got vote
+008258 VOTE S4 Granting Vote to S1 at T1
+008259 PERS S4 Saved State T:1 VF:1
+008258 PERS S3 Saved State T:1 VF:1
+008259 LOG2 S3 Saved Log (-1, 0) [{<nil> 0}]
+008259 VOTE S1 <- S2 Got vote
+008260 LEAD S1 Achieved Majority for T1 (3), converting to Leader
+008260 TIMR S1 Broadcast, reseting HBT
+008260 LOG1 S1 -> S0 Sending PLI: 0 PLT: 0 N: 0 LC: 0 - []
+008260 LOG1 S1 -> S2 Sending PLI: 0 PLT: 0 N: 0 LC: 0 - []
+008259 LOG2 S4 Saved Log (-1, 0) [{<nil> 0}]
+008261 LOG1 S1 -> S3 Sending PLI: 0 PLT: 0 N: 0 LC: 0 - []
+008262 LOG1 S1 -> S4 Sending PLI: 0 PLT: 0 N: 0 LC: 0 - []
+008262 TIMR S1 Leader, checking heartbeats
+008263 TIMR S0 Resetting ELT, received AppEnt T1
+008263 TIMR S3 Resetting ELT, received AppEnt T1
+008264 TIMR S2 Resetting ELT, received AppEnt T1
+008264 LOG2 S2 LOG: (-1, 0) [{<nil> 0}]
